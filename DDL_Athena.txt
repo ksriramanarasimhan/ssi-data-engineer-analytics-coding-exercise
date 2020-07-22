@@ -1,0 +1,16 @@
+CREATE EXTERNAL TABLE IF NOT EXISTS testdb_sriram.elements (
+  `author` string,
+  `mailcontent_body_text` string,
+  `mailcontent_subject` string,
+  `elements_createdat` bigint,
+  `id` string,
+  `recipient` string,
+  `threadurn` string,
+  `recipient_name` string,
+  `recipient_createdat` bigint
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
+WITH SERDEPROPERTIES (
+  'serialization.format' = '1'
+) LOCATION 's3://glue-etl-test-sriram/output-dir/'
+TBLPROPERTIES ('has_encrypted_data'='false');

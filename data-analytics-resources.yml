@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+    CFNDatabaseName: 
+        Type: String
+        Default: cfn-sriram-db1
+    CFNCrawlerName:  
+        Type: String
+        Default: cfn-crawler-1
+    CFNTablePrefixName:
+        Type: String
+        Default: cfn_tbl_
+    CFNClassifierName:  
+        Type: String
+        Default: cfn-classifier-1
+    CFNJobNameElements:  
+        Type: String
+        Default: cfn-job-S3-to-athena-elements
+    CFNJobNameRecipients:  
+        Type: String
+        Default: cfn-job-S3-to-athena-recipients
+    CFNScriptLocationElements:  
+        Type: String
+        Default: s3://glue-etl-test-sriram/elements.py
+    
+    CFNTriggerNameElements:
+        Type: String
+        Default: cfn-trigger-ondemand-elements
+    
+
+Resources:
+
+    #Define the database
+    DataCatalog:
+        Type: 'AWS::Glue::Database'
+        Properties: 
+            CatalogId: !Ref AWS::AccountId   
+            DatabaseInput:
+                Name: !Ref CFNDatabaseName	
+                Description: Database to hold tables for test data
+                LocationUri: s3://glue-etl-test-sriram/
+    
+    #Define Crawler for Elements file
+    CrawlerElements:
+        Type: 'AWS::Glue::Crawler'
+        Properties: 
+            Name: !Ref CFNCrawlerName
+            Role: "arn:aws:iam::306274476772:role/AWSGlueServiceRoleSriram"
+            Description: AWS Glue crawler to crawl test data
+            #Schedule: none, use default run-on-demand
+            DatabaseName: !Ref CFNDatabaseName
+            Targets:
+                S3Targets:
+                - Path: "s3://glue-etl-test-sriram/linkedin_inmail_raw_elements.json"
+            TablePrefix: !Ref CFNTablePrefixName
+            SchemaChangePolicy:
+                UpdateBehavior: "UPDATE_IN_DATABASE"
+                DeleteBehavior: "LOG"
+            Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+    
+    #Define Crawler for Recipients file
+    CrawlerRecipients:
+        Type: 'AWS::Glue::Crawler'
+        Properties: 
+            Name: !Ref CFNCrawlerName
+            Role: "arn:aws:iam::306274476772:role/AWSGlueServiceRoleSriram"
+            Description: AWS Glue crawler to crawl test data
+            #Schedule: none, use default run-on-demand
+            DatabaseName: !Ref CFNDatabaseName
+            Targets:
+                S3Targets:
+                - Path: "s3://glue-etl-test-sriram/linkedin_inmail_raw_recipient.json"
+            TablePrefix: !Ref CFNTablePrefixName
+            SchemaChangePolicy:
+                UpdateBehavior: "UPDATE_IN_DATABASE"
+                DeleteBehavior: "LOG"
+            Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+
+    #Define a job. Script is referred using ScriptLocation. This file is attached separately
+    GlueJobElements:
+        Type: 'AWS::Glue::Job'
+        Properties: 
+            Role: "arn:aws:iam::306274476772:role/AWSGlueServiceRoleSriram"
+            Command:   
+                Name: glueetlelements  
+                ScriptLocation: !Ref CFNScriptLocationElements
+            AllocatedCapacity: 5  
+            ExecutionProperty:   
+                MaxConcurrentRuns: 1  
+            Name: !Ref CFNJobNameElements
+
+    #Define the job trigger
+    TriggerElements:
+        Type: 'AWS::Glue::Trigger'
+        Properties: 
+            Name:
+                Ref: CFNTriggerNameElements		
+            Description: Elements Trigger created with CloudFormation
+            Type: ON_DEMAND                                                        	   
+            Actions:
+             - JobName: !Ref CFNJobNameElements
+
+    #Define the Athena Query to run
+    AthenaQuery:
+        Type: 'AWS::Athena::NamedQuery'
+        Properties:
+            Database: !Ref CFNDatabaseName
+            Description: "Sample Query"
+            Name: "CFNQuery"
+            QueryString: >
+                    SELECT DISTINCT *
+                    FROM "test_db"."enricheddata_test_table"
+                    WHERE "recipient_name" = 'John Doe';
+Outputs:
+
+    AthenaQuery:
+        Value: !Ref AthenaQuery
